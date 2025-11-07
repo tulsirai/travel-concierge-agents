@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Travel Agent</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: "Segoe UI", Roboto, sans-serif;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #f8f9fd;
+            color: #0f172a;
+            display: flex;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .app {
+            width: min(900px, 100%);
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        header h1 {
+            margin: 0 0 .25rem;
+            font-size: 1.5rem;
+        }
+        header p {
+            margin: 0;
+            color: #475569;
+        }
+        .controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        .controls input {
+            flex: 1;
+            padding: .65rem .9rem;
+            border-radius: 8px;
+            border: 1px solid #cbd5f5;
+            font-size: .95rem;
+        }
+        .controls button {
+            padding: .65rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            background: #2563eb;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .chat {
+            padding: 2rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .bubble {
+            max-width: 80%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .user {
+            margin-left: auto;
+            background: #2563eb;
+            color: #fff;
+        }
+        .assistant {
+            margin-right: auto;
+            background: #f1f5f9;
+        }
+        form {
+            display: flex;
+            gap: 1rem;
+            padding: 1.5rem 2rem 2rem;
+            border-top: 1px solid #e2e8f0;
+        }
+        textarea {
+            flex: 1;
+            resize: vertical;
+            min-height: 60px;
+            border-radius: 10px;
+            border: 1px solid #cbd5f5;
+            padding: .9rem 1rem;
+            font-size: 1rem;
+        }
+        form button {
+            border: none;
+            background: #0ea5e9;
+            color: #fff;
+            border-radius: 10px;
+            padding: 0 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .status {
+            margin-top: .5rem;
+            color: #64748b;
+            font-size: .9rem;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>Travel Concierge</h1>
+        <p>Ask for itineraries, destination guidance, or logistics.</p>
+        <div class="controls">
+            <input id="conversationId" placeholder="Conversation ID (auto-generated)">
+            <button id="resetBtn" type="button">New Conversation</button>
+        </div>
+        <div class="status" id="status">Ready.</div>
+    </header>
+    <div class="chat" id="chat"></div>
+    <form id="chatForm">
+        <textarea id="message" placeholder="What would you like to plan?" required></textarea>
+        <button type="submit">Send</button>
+    </form>
+</div>
+<script>
+    const chatEl = document.getElementById('chat');
+    const statusEl = document.getElementById('status');
+    const form = document.getElementById('chatForm');
+    const messageInput = document.getElementById('message');
+    const conversationInput = document.getElementById('conversationId');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function uuid() {
+        return crypto.randomUUID ? crypto.randomUUID() :
+            'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+    }
+
+    function ensureConversation() {
+        if (!conversationInput.value) {
+            conversationInput.value = uuid();
+        }
+        return conversationInput.value;
+    }
+
+    function addBubble(role, content) {
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${role}`;
+        bubble.textContent = content;
+        chatEl.appendChild(bubble);
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    async function sendMessage(text) {
+        const conversationId = ensureConversation();
+        statusEl.textContent = 'Thinking...';
+        try {
+            const response = await fetch('/api/agent/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({conversationId, message: text})
+            });
+            if (!response.ok) {
+                throw new Error(await response.text());
+            }
+            const payload = await response.json();
+            addBubble('assistant', payload.reply);
+            statusEl.textContent = `Conversation: ${payload.conversationId}`;
+        } catch (error) {
+            statusEl.textContent = `Error: ${error.message}`;
+        }
+    }
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const text = messageInput.value.trim();
+        if (!text) {
+            return;
+        }
+        addBubble('user', text);
+        messageInput.value = '';
+        sendMessage(text);
+    });
+
+    resetBtn.addEventListener('click', () => {
+        conversationInput.value = '';
+        chatEl.innerHTML = '';
+        statusEl.textContent = 'Started new conversation.';
+    });
+
+    ensureConversation();
+</script>
+</body>
+</html>
