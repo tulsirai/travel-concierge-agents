@@ -2,19 +2,21 @@ package com.example.travelagent.agent;
 
 import com.example.travelagent.controller.dto.ChatRequest;
 import com.example.travelagent.controller.dto.ChatResponse;
-import com.microsoft.semantickernel.Kernel;
-import com.microsoft.semantickernel.orchestration.InvocationContext;
-import com.microsoft.semantickernel.orchestration.PromptExecutionSettings;
-import com.microsoft.semantickernel.services.ServiceNotFoundException;
-import com.microsoft.semantickernel.services.chatcompletion.ChatCompletionService;
-import com.microsoft.semantickernel.services.chatcompletion.ChatHistory;
-import com.microsoft.semantickernel.services.chatcompletion.ChatMessageContent;
+import com.example.travelagent.tool.TravelInfoTool;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.azure.openai.AzureOpenAiChatOptions;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -24,11 +26,13 @@ import org.springframework.util.StringUtils;
 public class TravelAgentService {
 
     private static final String SYSTEM_PROMPT = """
-            You are a helpful travel concierge. Use the travelTools plugin when \
+            You are a helpful travel concierge. Use the travel tools context when \
             you need destination facts, then craft a concise plan with next steps.
             """;
 
-    private final Kernel kernel;
+    private final ChatModel chatModel;
+    private final TravelInfoTool travelInfoTool;
+    private final AzureOpenAiChatOptions defaultChatOptions;
     private final Map<String, ConversationState> conversations = new ConcurrentHashMap<>();
 
     public ChatResponse handleTurn(ChatRequest request) {
@@ -36,27 +40,15 @@ public class TravelAgentService {
         ConversationState state = conversations.computeIfAbsent(conversationId, id -> new ConversationState());
 
         state.addMessage(AgentMessage.user(request.getMessage()));
+        List<AgentMessage> snapshotBeforeReply = state.snapshot();
 
-        ChatHistory history = buildHistory(state);
-        PromptExecutionSettings settings = PromptExecutionSettings.builder()
-                .withTemperature(0.4)
-                .withTopP(0.9)
-                .withMaxTokens(400)
-                .build();
-        InvocationContext invocationContext = InvocationContext.builder()
-                .withPromptExecutionSettings(settings)
-                .build();
+        Prompt prompt = new Prompt(
+                buildPromptMessages(snapshotBeforeReply, request.getMessage()),
+                AzureOpenAiChatOptions.fromOptions(defaultChatOptions)
+        );
+        org.springframework.ai.chat.model.ChatResponse aiResponse = chatModel.call(prompt);
 
-        ChatCompletionService chatService = getChatService();
-        List<ChatMessageContent<?>> responses = chatService
-                .getChatMessageContentsAsync(history, kernel, invocationContext)
-                .block();
-
-        if (responses == null || responses.isEmpty()) {
-            throw new IllegalStateException("Model returned no content.");
-        }
-
-        String reply = responses.get(0).getContent();
+        String reply = extractReply(aiResponse);
         state.addMessage(AgentMessage.assistant(reply));
 
         return ChatResponse.builder()
@@ -66,30 +58,36 @@ public class TravelAgentService {
                 .build();
     }
 
+    private List<Message> buildPromptMessages(List<AgentMessage> history, String latestUserMessage) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new SystemMessage(SYSTEM_PROMPT));
+
+        travelInfoTool.detectFact(latestUserMessage)
+                .ifPresent(fact -> messages.add(new SystemMessage(
+                        "travelTools.destination_facts(\"" + fact.city() + "\") => " + fact.advice()
+                )));
+
+        history.forEach(message -> {
+            switch (message.role()) {
+                case "user" -> messages.add(new UserMessage(message.content()));
+                case "assistant" -> messages.add(new AssistantMessage(message.content()));
+                default -> log.warn("Unknown role {} ignored", message.role());
+            }
+        });
+        return messages;
+    }
+
+    private String extractReply(org.springframework.ai.chat.model.ChatResponse aiResponse) {
+        if (aiResponse == null || aiResponse.getResult() == null || aiResponse.getResult().getOutput() == null) {
+            throw new IllegalStateException("Model returned no content.");
+        }
+        return aiResponse.getResult().getOutput().getText();
+    }
+
     private String resolveConversationId(String provided) {
         if (StringUtils.hasText(provided)) {
             return provided;
         }
         return UUID.randomUUID().toString();
-    }
-
-    private ChatHistory buildHistory(ConversationState state) {
-        ChatHistory history = new ChatHistory(SYSTEM_PROMPT);
-        state.snapshot().forEach(message -> {
-            switch (message.role()) {
-                case "user" -> history.addUserMessage(message.content());
-                case "assistant" -> history.addAssistantMessage(message.content());
-                default -> log.warn("Unknown role {} ignored", message.role());
-            }
-        });
-        return history;
-    }
-
-    private ChatCompletionService getChatService() {
-        try {
-            return kernel.getService(ChatCompletionService.class);
-        } catch (ServiceNotFoundException e) {
-            throw new IllegalStateException("ChatCompletionService is not registered in the Kernel.", e);
-        }
     }
 }

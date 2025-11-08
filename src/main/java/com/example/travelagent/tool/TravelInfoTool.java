@@ -1,10 +1,10 @@
 package com.example.travelagent.tool;
 
-import com.microsoft.semantickernel.semanticfunctions.annotations.DefineKernelFunction;
-import com.microsoft.semantickernel.semanticfunctions.annotations.KernelFunctionParameter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Component
 public class TravelInfoTool {
@@ -15,15 +15,25 @@ public class TravelInfoTool {
             "new york", "Summer is busy; September offers good weather. Broadway tickets sell out quickly."
     );
 
-    @DefineKernelFunction(
-            name = "destination_facts",
-            description = "Returns planning insights for a given destination.")
-    public String destinationFacts(
-            @KernelFunctionParameter(name = "city", description = "Destination city") String city) {
-        if (city == null || city.isBlank()) {
+    public String destinationFacts(String city) {
+        if (!StringUtils.hasText(city)) {
             return "No city provided.";
         }
-        return Optional.ofNullable(QUICK_FACTS.get(city.toLowerCase()))
-                .orElse("Research visas, ideal seasons, and must-book activities before you travel to " + city + ".");
+        return QUICK_FACTS.getOrDefault(city.toLowerCase(Locale.ROOT),
+                "Research visas, ideal seasons, and must-book activities before you travel to " + city + ".");
+    }
+
+    public Optional<DestinationFact> detectFact(String text) {
+        if (!StringUtils.hasText(text)) {
+            return Optional.empty();
+        }
+        String normalized = text.toLowerCase(Locale.ROOT);
+        return QUICK_FACTS.keySet().stream()
+                .filter(normalized::contains)
+                .findFirst()
+                .map(city -> new DestinationFact(city, destinationFacts(city)));
+    }
+
+    public record DestinationFact(String city, String advice) {
     }
 }

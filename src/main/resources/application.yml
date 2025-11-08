@@ -2,8 +2,14 @@ spring:
   application:
     name: travel-agent
 
-semantic-kernel:
-  default-model: gpt-41-agia-ai-poc-westus
-  openai:
-    api-key: 75torbMyLr9T67hbSgctkKukNuUAYdw7kFntrJ0DtkDseMYEVwu0JQQJ99BJAC4f1cMXJ3w3AAAAACOGKZ8S
-    endpoint: https://rs-agia-ai-poc-westus.cognitiveservices.azure.com/
+  ai:
+    azure:
+      openai:
+        api-key: ${SPRING_AI_AZURE_OPENAI_API_KEY:${AZURE_OPENAI_API_KEY:${AZURE_OPENAI_KEY:}}}
+        endpoint: ${SPRING_AI_AZURE_OPENAI_ENDPOINT:${AZURE_OPENAI_ENDPOINT:https://rs-agia-ai-poc-westus.cognitiveservices.azure.com/}}
+        deployment-name: ${SPRING_AI_AZURE_OPENAI_DEPLOYMENT_NAME:${AZURE_OPENAI_DEPLOYMENT_NAME:${AZURE_OPENAI_DEPLOYMENT:gpt-41-agia-ai-poc-westus}}}
+        chat:
+          options:
+            temperature: 0.4
+            top-p: 0.9
+            max-tokens: 800
