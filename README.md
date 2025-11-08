@@ -1,5 +1,7 @@
 # Travel Agent (Semantic Kernel + Spring Boot)
 
+> **Branch spotlight:** `knowledge-base-demo` extends the baseline Semantic Kernel agent with a private knowledge base. The agent now pulls in curated household/travel facts from `src/main/resources/data/private_knowledge.json` via `PrivateKnowledgeService` and injects that context into the LLM prompt, demonstrating how agents can blend public tools with private data.
+
 This project mirrors the Python Semantic Kernel agent from the **AI Agents for Beginners** series, but it is implemented with **Java 17**, **Spring Boot 3.5.7**, and **Semantic Kernel for Java**.
 
 ## Features
