@@ -2,6 +2,7 @@ package com.example.travelagent.agent;
 
 import com.example.travelagent.controller.dto.ChatRequest;
 import com.example.travelagent.controller.dto.ChatResponse;
+import com.example.travelagent.knowledge.PrivateKnowledgeService;
 import com.example.travelagent.tool.TravelInfoTool;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +34,7 @@ public class TravelAgentService {
     private final ChatModel chatModel;
     private final TravelInfoTool travelInfoTool;
     private final AzureOpenAiChatOptions defaultChatOptions;
+    private final PrivateKnowledgeService privateKnowledgeService;
     private final Map<String, ConversationState> conversations = new ConcurrentHashMap<>();
 
     public ChatResponse handleTurn(ChatRequest request) {
@@ -65,6 +67,10 @@ public class TravelAgentService {
         travelInfoTool.detectFact(latestUserMessage)
                 .ifPresent(fact -> messages.add(new SystemMessage(
                         "travelTools.destination_facts(\"" + fact.city() + "\") => " + fact.advice()
+                )));
+        privateKnowledgeService.findContext(latestUserMessage)
+                .ifPresent(context -> messages.add(new SystemMessage(
+                        "Private household context: " + context
                 )));
 
         history.forEach(message -> {
