@@ -2,6 +2,7 @@ package com.example.travelagent.agent;
 
 import com.example.travelagent.controller.dto.ChatRequest;
 import com.example.travelagent.controller.dto.ChatResponse;
+import com.example.travelagent.knowledge.PrivateKnowledgeService;
 import com.microsoft.semantickernel.Kernel;
 import com.microsoft.semantickernel.orchestration.InvocationContext;
 import com.microsoft.semantickernel.orchestration.PromptExecutionSettings;
@@ -11,6 +12,7 @@ import com.microsoft.semantickernel.services.chatcompletion.ChatHistory;
 import com.microsoft.semantickernel.services.chatcompletion.ChatMessageContent;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class TravelAgentService {
 
     private final Kernel kernel;
     private final Map<String, ConversationState> conversations = new ConcurrentHashMap<>();
+    private final PrivateKnowledgeService privateKnowledgeService;
 
     public ChatResponse handleTurn(ChatRequest request) {
         String conversationId = resolveConversationId(request.getConversationId());
@@ -37,7 +40,9 @@ public class TravelAgentService {
 
         state.addMessage(AgentMessage.user(request.getMessage()));
 
-        ChatHistory history = buildHistory(state);
+        var privateContext = privateKnowledgeService.findContext(request.getMessage());
+
+        ChatHistory history = buildHistory(state, privateContext);
         PromptExecutionSettings settings = PromptExecutionSettings.builder()
                 .withTemperature(0.4)
                 .withTopP(0.9)
@@ -73,8 +78,11 @@ public class TravelAgentService {
         return UUID.randomUUID().toString();
     }
 
-    private ChatHistory buildHistory(ConversationState state) {
+    private ChatHistory buildHistory(ConversationState state, Optional<String> privateContext) {
         ChatHistory history = new ChatHistory(SYSTEM_PROMPT);
+        privateContext.ifPresent(context ->
+                history.addSystemMessage("Private household context: " + context)
+        );
         state.snapshot().forEach(message -> {
             switch (message.role()) {
                 case "user" -> history.addUserMessage(message.content());
