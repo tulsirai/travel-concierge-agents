@@ -41,7 +41,7 @@ public class TravelAgentService {
         PromptExecutionSettings settings = PromptExecutionSettings.builder()
                 .withTemperature(0.4)
                 .withTopP(0.9)
-                .withMaxTokens(400)
+                .withMaxTokens(800)
                 .build();
         InvocationContext invocationContext = InvocationContext.builder()
                 .withPromptExecutionSettings(settings)
