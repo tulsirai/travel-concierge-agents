@@ -4,3 +4,5 @@ target/
 mvnw
 mvnw.cmd
 *.iml
+.env
+.DS_Store
